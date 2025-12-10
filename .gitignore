@@ -1,0 +1,6 @@
+__pycache__/
+*.txt
+*.log
+*.l5k
+*.l5kproj
+!requirements.txt

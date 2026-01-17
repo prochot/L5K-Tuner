@@ -12,3 +12,4 @@
 - GUI enhancements: File/View/Help menus, log viewer, status bar and title updates, selection control enable/disable, include/exclude buttons, file name display.
 - Logging improvements: standardized logging and action logs for import/export/open/save/close/merge.
 - Added tests for AOI base-type correction, program tags, export features, filtering/persistence, tree state round-trips, and project JSON round-trip (GUI and no-GUI).
+- Built pyinstaller exe L5KTuner.exe

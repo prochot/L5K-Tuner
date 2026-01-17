@@ -1,6 +1,11 @@
 __pycache__/
+dist/
+build/
+output/
 *.txt
 *.log
 *.l5k
 *.l5kproj
+*.spec
+*.iss
 !requirements.txt

@@ -19,6 +19,7 @@ from .models import MemberType
 from . import l5k_parser as l5kp
 from .tree_state import TreeState, TreeNodeMeta
 from .view_filter import apply_filter
+from .utils import get_log_path
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,12 @@ class L5KTunerApp:
         self._parse_future = None
 
         master.title("L5K File Processor")
-        master.geometry("1120x740")
+        screen_w = master.winfo_screenwidth()
+        screen_h = master.winfo_screenheight()
+        if screen_w <= 1024 and screen_h <= 768:
+            master.state("zoomed")
+        else:
+            master.geometry("1120x740")
 
         self.project: Optional[models.L5KProject] = None
         self.parser: Optional[l5kp.L5KParser] = None
@@ -446,6 +452,15 @@ class L5KTunerApp:
                                                initialdir=initialdir)
         if not file_path:
             return
+        self.open_project_file(file_path)
+
+    def open_project_file(self, file_path: str) -> None:
+        if not os.path.isfile(file_path):
+            messagebox.showerror("Error", f"Project file not found: {file_path}")
+            return
+        self._open_project_json_path(file_path)
+
+    def _open_project_json_path(self, file_path: str) -> None:
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -482,7 +497,7 @@ class L5KTunerApp:
                                             initialdir=initialdir)
 
     def _show_log(self) -> None:
-        log_path = os.path.abspath("l5k_processor.log")
+        log_path = get_log_path()
         content = ""
         try:
             with open(log_path, "r", encoding="utf-8") as f:
@@ -505,6 +520,8 @@ class L5KTunerApp:
         ysb = ttk.Scrollbar(container, orient="vertical", command=txt.yview)
         ysb.pack(side=tk.RIGHT, fill=tk.Y)
         txt.configure(yscrollcommand=ysb.set)
+        status = ttk.Label(win, text=f"Log file: {log_path}", anchor="w")
+        status.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=(0, 6))
 
     def _close_project(self) -> None:
         # Reset in-memory state and UI to initial
@@ -963,7 +980,7 @@ class L5KTunerApp:
         summary = (
             "File parsed successfully.\n"
             f"Number of tags corrected: {len(corrected_tags_log)}\n"
-            "Corrections have been logged to 'l5k_processor.log'."
+            f"Corrections have been logged to '{get_log_path()}'."
         )
         for entry in corrected_tags_log:
             logger.info(entry)

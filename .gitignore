@@ -2,10 +2,12 @@ __pycache__/
 dist/
 build/
 output/
+icon-concepts/
 *.txt
 *.log
 *.l5k
 *.l5kproj
 *.spec
 *.iss
+*.png
 !requirements.txt

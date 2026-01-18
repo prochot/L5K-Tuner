@@ -55,6 +55,8 @@ class L5KTunerApp:
         self._last_source_label: str = ""
         self._filter_mode: str = "all"  # 'all' | 'enabled' | 'disabled'
         self._filter_var = tk.StringVar(value=self._filter_mode)
+        self._saved_snapshot: Optional[str] = None
+        self._dirty: bool = False
 
         self._create_widgets()
         self._set_selection_controls_enabled(False)
@@ -275,6 +277,7 @@ class L5KTunerApp:
             self._populate_tree(saved_states=saved_states)
             self._show_summary(corrected_log)
             self._set_selection_controls_enabled(True)
+            self._update_dirty_flag()
             self._filter_mode = "all"
             self._filter_var.set("all")
             self._set_status("Merged updated L5K", base)
@@ -346,8 +349,59 @@ class L5KTunerApp:
             elif kind == "PROGRAM_TAG" and parent and parent in project.programs:
                 project.programs[parent].tags.pop(name, None)
 
+    def _build_project_state(self) -> Optional[dict[str, Any]]:
+        if not self.parser or not self.project:
+            return None
+        return {
+            "controller_header_lines": getattr(self.parser, "controller_header_lines", []),
+            "controller_name": getattr(self.parser, "controller_name", None),
+            "header_text": getattr(self.parser, "header_text", ""),
+            "project": self._project_to_dict(self.project),
+            "checkbox_states": self._serialize_checkbox_states(),
+        }
+
+    def _snapshot_state(self) -> Optional[str]:
+        state = self._build_project_state()
+        if state is None:
+            return None
+        return json.dumps(state, sort_keys=True)
+
+    def _set_saved_snapshot(self, state: Optional[dict[str, Any]] = None) -> None:
+        snapshot = json.dumps(state, sort_keys=True) if state is not None else self._snapshot_state()
+        self._saved_snapshot = snapshot
+        self._dirty = False
+        self._refresh_window_title()
+
+    def _update_dirty_flag(self) -> None:
+        was_dirty = self._dirty
+        snapshot = self._snapshot_state()
+        if snapshot is None:
+            self._dirty = False
+        elif self._saved_snapshot is None:
+            self._dirty = True
+        else:
+            self._dirty = snapshot != self._saved_snapshot
+        if self._dirty != was_dirty:
+            self._refresh_window_title()
+
+    def _confirm_discard_changes(self, action: str) -> bool:
+        self._update_dirty_flag()
+        if not self._dirty:
+            return True
+        response = messagebox.askyesnocancel(
+            "Unsaved changes",
+            f"You have unsaved changes. Save before {action}?",
+        )
+        if response is None:
+            return False
+        if response:
+            return self._save_project_json()
+        return True
+
     # ---------------- File I/O ----------------
     def _load_file(self) -> None:
+        if not self._confirm_discard_changes("importing a new file"):
+            return
         file_path = filedialog.askopenfilename(filetypes=[("L5K Files", "*.l5k;*.L5K"), ("All Files", "*.*")])
         if not file_path:
             return
@@ -356,6 +410,7 @@ class L5KTunerApp:
                 file_content = f.read()
             base = os.path.basename(file_path)
             self._last_source_label = base
+            self._last_project_path = None
             self._set_status("Loaded file", base)
             self._set_window_title(file_path)
             self._set_filter_mode("all")
@@ -406,24 +461,21 @@ class L5KTunerApp:
         except Exception as e:  # noqa: BLE001
             messagebox.showerror("Error", f"Failed to save file: {e}")
 
-    def _save_project_json(self) -> None:
+    def _save_project_json(self) -> bool:
         if not self.parser or not self.project:
             messagebox.showwarning("Warning", "No file loaded.")
-            return
+            return False
         file_path = self._last_project_path
         if not file_path:
             file_path = self._prompt_save_path()
             if not file_path:
-                return
+                return False
             logger.info("Save As project file: %s", file_path)
         try:
-            data = {
-                "controller_header_lines": getattr(self.parser, "controller_header_lines", []),
-                "controller_name": getattr(self.parser, "controller_name", None),
-                "header_text": getattr(self.parser, "header_text", ""),
-                "project": self._project_to_dict(self.project),
-                "checkbox_states": self._serialize_checkbox_states(),
-            }
+            data = self._build_project_state()
+            if data is None:
+                messagebox.showwarning("Warning", "No file loaded.")
+                return False
             with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
             self._last_project_path = file_path
@@ -433,20 +485,25 @@ class L5KTunerApp:
             self._set_window_title(file_path)
             self._log_message("Project saved.")
             logger.info("Saved project file: %s", file_path)
+            self._set_saved_snapshot(data)
+            return True
         except Exception as e:  # noqa: BLE001
             messagebox.showerror("Error", f"Failed to save project: {e}")
+            return False
 
-    def _save_project_json_as(self) -> None:
+    def _save_project_json_as(self) -> bool:
         if not self.parser or not self.project:
             messagebox.showwarning("Warning", "No file loaded.")
-            return
+            return False
         file_path = self._prompt_save_path()
         if not file_path:
-            return
+            return False
         self._last_project_path = file_path
-        self._save_project_json()
+        return self._save_project_json()
 
     def _open_project_json(self) -> None:
+        if not self._confirm_discard_changes("opening another project"):
+            return
         initialdir = os.path.dirname(self._last_project_path) if self._last_project_path else None
         file_path = filedialog.askopenfilename(filetypes=[("L5K Project", "*.l5kproj;*.json"), ("All Files", "*.*")],
                                                initialdir=initialdir)
@@ -457,6 +514,8 @@ class L5KTunerApp:
     def open_project_file(self, file_path: str) -> None:
         if not os.path.isfile(file_path):
             messagebox.showerror("Error", f"Project file not found: {file_path}")
+            return
+        if not self._confirm_discard_changes("opening another project"):
             return
         self._open_project_json_path(file_path)
 
@@ -487,6 +546,7 @@ class L5KTunerApp:
             logger.info("Opened project file: %s", file_path)
             self._set_filter_mode("all")
             self._set_selection_controls_enabled(True)
+            self._set_saved_snapshot(data)
         except Exception as e:  # noqa: BLE001
             messagebox.showerror("Error", f"Failed to open project: {e}")
 
@@ -524,6 +584,11 @@ class L5KTunerApp:
         status.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=(0, 6))
 
     def _close_project(self) -> None:
+        if not self._confirm_discard_changes("closing the project"):
+            return
+        self._discard_project_state()
+
+    def _discard_project_state(self) -> None:
         # Reset in-memory state and UI to initial
         self.project = None
         self.parser = None
@@ -536,6 +601,9 @@ class L5KTunerApp:
         self.messages_text.configure(state="disabled")
         closed_label = self._last_source_label or "(unnamed)"
         self._last_source_label = ""
+        self._last_project_path = None
+        self._saved_snapshot = None
+        self._dirty = False
         self._set_status("Ready", None)
         self._set_window_title(None)
         logger.info("Closed file/project: %s", closed_label)
@@ -582,6 +650,7 @@ class L5KTunerApp:
             if getattr(self, "load_btn", None):
                 self.load_btn.config(state="normal")
             self._set_selection_controls_enabled(True)
+            self._set_saved_snapshot()
             logger.info("Parsed L5K file: %s", self._last_source_label)
         else:
             # keep polling until the worker finishes
@@ -891,6 +960,7 @@ class L5KTunerApp:
             return
         state = bool(self.select_var.get())
         self._set_state(self.selected_item_id, state, bubble_up=True)
+        self._update_dirty_flag()
 
     def _select_all(self) -> None:
         targets = tuple(self.tree.selection())
@@ -906,6 +976,7 @@ class L5KTunerApp:
         anchor = self.selected_item_id or targets[0]
         self.select_var.set(self.tree_state.get_checked(anchor, False))
         self._log_message("Selected chosen items (and children).")
+        self._update_dirty_flag()
 
     def _deselect_all(self) -> None:
         targets = tuple(self.tree.selection())
@@ -920,6 +991,7 @@ class L5KTunerApp:
         anchor = self.selected_item_id or targets[0]
         self.select_var.set(self.tree_state.get_checked(anchor, False))
         self._log_message("Deselected chosen items (and children).")
+        self._update_dirty_flag()
 
     # Build a structured selection to pass into parser
     def _build_selection_structure(self) -> l5kp.SelectionDict:
@@ -1208,6 +1280,8 @@ class L5KTunerApp:
 
     # Ensure clean shutdown for the background process
     def _on_close(self):
+        if not self._confirm_discard_changes("exiting"):
+            return
         # Try to cancel a running parse cleanly
         self._cleanup_executor()
         # Close the window
@@ -1246,7 +1320,13 @@ class L5KTunerApp:
         title = "L5K File Processor"
         if base:
             title = f"{title} - {base}"
+        if self._dirty:
+            title = f"{title} *"
         self.master.title(title)
+
+    def _refresh_window_title(self) -> None:
+        path = self._last_project_path or self._last_source_label or None
+        self._set_window_title(path)
 
     def _set_status(self, text: str, source: Optional[str]) -> None:
         label = text

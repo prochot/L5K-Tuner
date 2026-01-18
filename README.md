@@ -8,12 +8,17 @@ GUI tool for importing Rockwell Logix `.l5k` files, inspecting and pruning tags/
 - Save/Load project state to `.l5kproj` (restores selections and descriptions without needing the original `.l5k`).
 - Merge updated `.l5k` files with a preview and per-item add/remove selection.
 - View filters: show all, enabled-only, or disabled-only items.
-- Log viewer (Help → Show Log) and status/title updates that reflect the current file.
+- Prompt to save project changes before closing, opening another project, or importing a new file.
+- Log viewer (Help -> Show Log) and status/title updates that reflect the current file.
 
 ## Requirements
-- Python 3.12+
+- Python 3.12+ (source install only)
 
 ## Installation
+### Windows installer
+Download the latest Windows installer from GitHub Releases. This does not require Python.
+
+### Source (Python)
 ```bash
 python -m venv .venv
 .venv\Scripts\activate  # Windows
@@ -24,16 +29,17 @@ pip install -r requirements.txt
 ```bash
 python -m L5KTuner.main
 ```
+If installed via the Windows installer, launch from the Start Menu.
 
 ## Usage
-- File → Import (or “Import L5K” button): load an `.l5k` file.
+- File -> Import (or "Import L5K" button): load an `.l5k` file.
 - Inspect the tree and toggle inclusion with the right-panel checkbox or the Include/Exclude buttons.
-- File → Export: write a filtered `.l5k` with only selected items.
-- File → Save / Save As: save project state to `.l5kproj` (includes selections/descriptions).
-- File → Open: reload a saved `.l5kproj` without the original `.l5k`.
-- File → Merge Updated L5K: preview differences against the current project and choose which additions/removals to apply.
-- View → Show: filter the tree (all/enabled/disabled).
-- Help → Show Log: open the log viewer.
+- File -> Export: write a filtered `.l5k` with only selected items.
+- File -> Save / Save As: save project state to `.l5kproj` (includes selections/descriptions).
+- File -> Open: reload a saved `.l5kproj` without the original `.l5k`.
+- File -> Merge Updated L5K: preview differences against the current project and choose which additions/removals to apply.
+- View -> Show: filter the tree (all/enabled/disabled).
+- Help -> Show Log: open the log viewer.
 
 ## Testing
 Run the test suite from the repo root:
@@ -48,7 +54,8 @@ Tk-dependent tests auto-skip if Tk is unavailable.
 - `tests/`: parsing/export/filtering/persistence tests.
 
 ## Logging
-- Logs to `l5k_processor.log` in the repo root when running the app.
+- Logs to `%USERPROFILE%\Documents\EWEB Apps\L5K Tuner\logs\l5k_tuner.log` by default.
+- Override with `L5KTUNER_LOG_DIR`.
 
 ## License
 MIT License (see `LICENSE`).

@@ -3,6 +3,12 @@
 ## Unreleased
 - (none)
 
+## 0.1.1 - 2026-01-18
+- Added dirty tracking with save prompts on close/open/import and a title-bar indicator.
+- Auto-maximizes the window on small screens (1024x768 or smaller).
+- Logging now writes to the user Documents folder and the log viewer shows the full path.
+- Updated Windows packaging: new app/file icons and installer notes.
+
 ## 0.1.0 - 2025-12-07
 - Added structured tree state (`TreeState`) with filtering helpers and persisted checkbox state; View menu supports enabled/disabled/all filters.
 - Introduced project save/load (`.l5kproj`) independent of the original `.l5k`; restored checkbox states and status-bar/title updates.

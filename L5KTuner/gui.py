@@ -86,6 +86,8 @@ class L5KTunerApp:
         self.tree = ttk.Treeview(left, show='tree headings')
         self.tree.heading("#0", text="Tag / Component", anchor='w')
         self.tree.pack(side=tk.LEFT, expand=True, fill=tk.BOTH)
+        self.tree.tag_configure("excluded", foreground="#8a8a8a")
+        self.tree.tag_configure("included", foreground="#111111")
 
         sb = ttk.Scrollbar(left, orient="vertical", command=self.tree.yview)
         sb.pack(side=tk.RIGHT, fill=tk.Y)
@@ -721,7 +723,15 @@ class L5KTunerApp:
 
         if saved_states:
             self._restore_checkbox_states(saved_states)
+        self._apply_tree_tags()
         self._apply_filter()
+
+    def _apply_tree_tags(self) -> None:
+        for iid, checked in self.tree_state.checks.items():
+            self._set_tree_item_tag(iid, checked)
+
+    def _set_tree_item_tag(self, item_id: str, state: bool) -> None:
+        self.tree.item(item_id, tags=("included" if state else "excluded",))
 
     def _add_header_node(self) -> None:
         header_id = self.tree.insert("", "end", text="L5K Header", open=False)
@@ -1068,6 +1078,7 @@ class L5KTunerApp:
     def _set_state(self, item_id: str, state: bool, bubble_up: bool = True) -> None:
         """Set state for item, propagate down to children, and bubble upwards if requested."""
         self.tree_state.set_checked(item_id, state)
+        self._set_tree_item_tag(item_id, state)
         # Downward propagation
         for child in self.tree.get_children(item_id):
             self._set_state(child, state, bubble_up=False)
@@ -1076,6 +1087,9 @@ class L5KTunerApp:
             new_state = self.tree_state.update_parent_states(self.tree, self.selected_item_id)
             if new_state is not None and self.selected_item_id:
                 self.select_var.set(new_state)
+            if self.selected_item_id:
+                parent_state = self.tree_state.get_checked(self.selected_item_id, False)
+                self._set_tree_item_tag(self.selected_item_id, parent_state)
 
     def _toggle_selection(self) -> None:
         if self.selected_item_id is None:
@@ -1087,6 +1101,7 @@ class L5KTunerApp:
             return
         state = bool(self.select_var.get())
         self._set_state(self.selected_item_id, state, bubble_up=True)
+        self._apply_tree_tags()
         self._update_dirty_flag()
         self._refresh_selected_details()
 
@@ -1104,6 +1119,7 @@ class L5KTunerApp:
         anchor = self.selected_item_id or targets[0]
         self.select_var.set(self.tree_state.get_checked(anchor, False))
         self._log_message("Selected chosen items (and children).")
+        self._apply_tree_tags()
         self._update_dirty_flag()
         self._refresh_selected_details()
 
@@ -1120,6 +1136,7 @@ class L5KTunerApp:
         anchor = self.selected_item_id or targets[0]
         self.select_var.set(self.tree_state.get_checked(anchor, False))
         self._log_message("Deselected chosen items (and children).")
+        self._apply_tree_tags()
         self._update_dirty_flag()
         self._refresh_selected_details()
 

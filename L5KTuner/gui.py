@@ -816,26 +816,75 @@ class L5KTunerApp:
             MemberType.ROOT_PROGRAM_TAGS,
         ):
             if meta.node_type == MemberType.ROOT_UDT:
-                n_udt = len(self.project.udts)
-                total_members = sum(len(u.members) for u in self.project.udts.values())
-                lines.append(f"UDTs: {n_udt}")
-                lines.append(f"Total members across UDTs: {total_members}")
+                udt_iids = [iid for iid, m in self.tree_state.meta.items() if m.node_type == MemberType.UDT]
+                n_udt = len(udt_iids)
+                included_udt = sum(1 for iid in udt_iids if self.tree_state.get_checked(iid, False))
+                excluded_udt = n_udt - included_udt
+
+                member_iids: list[str] = []
+                for iid, m in self.tree_state.meta.items():
+                    if m.node_type != MemberType.UDT_MEMBER:
+                        continue
+                    parent_iid = self.tree.parent(iid)
+                    if not parent_iid:
+                        continue
+                    parent_meta = self.tree_state.get_meta(parent_iid)
+                    if parent_meta and parent_meta.node_type == MemberType.UDT:
+                        member_iids.append(iid)
+                total_members = len(member_iids)
+                included_members = sum(1 for iid in member_iids if self.tree_state.get_checked(iid, False))
+                excluded_members = total_members - included_members
+
+                lines.append(f"UDTs: {n_udt} (Included: {included_udt}, Excluded: {excluded_udt})")
+                lines.append(
+                    f"UDT members: {total_members} (Included: {included_members}, Excluded: {excluded_members})"
+                )
                 return lines
             if meta.node_type == MemberType.ROOT_AOI:
-                n_aoi = len(self.project.aois)
-                total_params = sum(len(a.parameters) for a in self.project.aois.values())
-                total_locals = sum(len(a.localtags) for a in self.project.aois.values())
-                lines.append(f"Add-On Instructions: {n_aoi}")
-                lines.append(f"Total parameters: {total_params}")
-                lines.append(f"Total local tags: {total_locals}")
+                aoi_iids = [iid for iid, m in self.tree_state.meta.items() if m.node_type == MemberType.AOI]
+                n_aoi = len(aoi_iids)
+                included_aoi = sum(1 for iid in aoi_iids if self.tree_state.get_checked(iid, False))
+                excluded_aoi = n_aoi - included_aoi
+
+                param_iids = [iid for iid, m in self.tree_state.meta.items() if m.node_type == MemberType.AOI_PARAMETER]
+                local_iids = [iid for iid, m in self.tree_state.meta.items() if m.node_type == MemberType.AOI_LOCAL_TAG]
+                total_params = len(param_iids)
+                total_locals = len(local_iids)
+                included_params = sum(1 for iid in param_iids if self.tree_state.get_checked(iid, False))
+                included_locals = sum(1 for iid in local_iids if self.tree_state.get_checked(iid, False))
+
+                lines.append(f"Add-On Instructions: {n_aoi} (Included: {included_aoi}, Excluded: {excluded_aoi})")
+                lines.append(
+                    f"Parameters: {total_params} (Included: {included_params}, Excluded: {total_params - included_params})"
+                )
+                lines.append(
+                    f"Local tags: {total_locals} (Included: {included_locals}, Excluded: {total_locals - included_locals})"
+                )
                 return lines
             if meta.node_type == MemberType.ROOT_CONTROLLER_TAGS:
-                lines.append(f"Controller tags: {len(self.project.tags)}")
+                tag_iids = [
+                    iid
+                    for iid, m in self.tree_state.meta.items()
+                    if m.node_type == MemberType.TAG and m.parent is None
+                ]
+                total_tags = len(tag_iids)
+                included_tags = sum(1 for iid in tag_iids if self.tree_state.get_checked(iid, False))
+                lines.append(
+                    f"Controller tags: {total_tags} (Included: {included_tags}, Excluded: {total_tags - included_tags})"
+                )
                 return lines
             if meta.node_type == MemberType.ROOT_PROGRAM_TAGS:
                 prog_name = meta.name
-                prog = self.project.programs.get(str(prog_name)) if prog_name else None
-                lines.append(f"Program tags: {len(prog.tags) if prog else 0}")
+                tag_iids = [
+                    iid
+                    for iid, m in self.tree_state.meta.items()
+                    if m.node_type == MemberType.TAG and m.parent == prog_name
+                ]
+                total_tags = len(tag_iids)
+                included_tags = sum(1 for iid in tag_iids if self.tree_state.get_checked(iid, False))
+                lines.append(
+                    f"Program tags: {total_tags} (Included: {included_tags}, Excluded: {total_tags - included_tags})"
+                )
                 return lines
 
         # Object nodes
@@ -845,14 +894,46 @@ class L5KTunerApp:
         if k == MemberType.UDT:
             udt = self.project.udts.get(name)
             if udt:
-                lines.append(f"Members: {len(udt.members)}")
+                member_iids: list[str] = []
+                for iid, m in self.tree_state.meta.items():
+                    if m.node_type != MemberType.UDT_MEMBER or m.parent != name:
+                        continue
+                    parent_iid = self.tree.parent(iid)
+                    if not parent_iid:
+                        continue
+                    parent_meta = self.tree_state.get_meta(parent_iid)
+                    if parent_meta and parent_meta.node_type == MemberType.UDT:
+                        member_iids.append(iid)
+                total_members = len(member_iids)
+                included_members = sum(1 for iid in member_iids if self.tree_state.get_checked(iid, False))
+                lines.append(
+                    f"Members: {total_members} (Included: {included_members}, Excluded: {total_members - included_members})"
+                )
             return lines
 
         if k == MemberType.AOI:
             aoi = self.project.aois.get(name)
             if aoi:
-                lines.append(f"Parameters: {len(aoi.parameters)}")
-                lines.append(f"Local tags: {len(aoi.localtags)}")
+                param_iids = [
+                    iid
+                    for iid, m in self.tree_state.meta.items()
+                    if m.node_type == MemberType.AOI_PARAMETER and m.parent == name
+                ]
+                local_iids = [
+                    iid
+                    for iid, m in self.tree_state.meta.items()
+                    if m.node_type == MemberType.AOI_LOCAL_TAG and m.parent == name
+                ]
+                total_params = len(param_iids)
+                total_locals = len(local_iids)
+                included_params = sum(1 for iid in param_iids if self.tree_state.get_checked(iid, False))
+                included_locals = sum(1 for iid in local_iids if self.tree_state.get_checked(iid, False))
+                lines.append(
+                    f"Parameters: {total_params} (Included: {included_params}, Excluded: {total_params - included_params})"
+                )
+                lines.append(
+                    f"Local tags: {total_locals} (Included: {included_locals}, Excluded: {total_locals - included_locals})"
+                )
             return lines
 
         if k == MemberType.TAG:
@@ -992,6 +1073,7 @@ class L5KTunerApp:
         state = bool(self.select_var.get())
         self._set_state(self.selected_item_id, state, bubble_up=True)
         self._update_dirty_flag()
+        self._refresh_selected_details()
 
     def _select_all(self) -> None:
         targets = tuple(self.tree.selection())
@@ -1008,6 +1090,7 @@ class L5KTunerApp:
         self.select_var.set(self.tree_state.get_checked(anchor, False))
         self._log_message("Selected chosen items (and children).")
         self._update_dirty_flag()
+        self._refresh_selected_details()
 
     def _deselect_all(self) -> None:
         targets = tuple(self.tree.selection())
@@ -1023,6 +1106,14 @@ class L5KTunerApp:
         self.select_var.set(self.tree_state.get_checked(anchor, False))
         self._log_message("Deselected chosen items (and children).")
         self._update_dirty_flag()
+        self._refresh_selected_details()
+
+    def _refresh_selected_details(self) -> None:
+        if not self.selected_item_id:
+            return
+        if self.selected_item_id not in self.tree.selection():
+            self.tree.selection_set(self.selected_item_id)
+        self._on_tree_select(None)
 
     # Build a structured selection to pass into parser
     def _build_selection_structure(self) -> l5kp.SelectionDict:

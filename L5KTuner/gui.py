@@ -60,6 +60,7 @@ class L5KTunerApp:
 
         self._create_widgets()
         self._set_selection_controls_enabled(False)
+        self._bind_shortcuts()
 
         self.master.protocol("WM_DELETE_WINDOW", self._on_close)
         atexit.register(self._cleanup_executor)
@@ -134,8 +135,8 @@ class L5KTunerApp:
     def _build_menubar(self) -> None:
         menubar = tk.Menu(self.master)
         file_menu = tk.Menu(menubar, tearoff=0)
-        file_menu.add_command(label="Open", command=self._open_project_json)
-        file_menu.add_command(label="Save", command=self._save_project_json)
+        file_menu.add_command(label="Open", command=self._open_project_json, accelerator="Ctrl+O")
+        file_menu.add_command(label="Save", command=self._save_project_json, accelerator="Ctrl+S")
         file_menu.add_command(label="Save As...", command=self._save_project_json_as)
         file_menu.add_separator()
         file_menu.add_command(label="Import", command=self._load_file)
@@ -162,6 +163,20 @@ class L5KTunerApp:
         menubar.add_cascade(label="Help", menu=help_menu)
 
         self.master.config(menu=menubar)
+
+    def _bind_shortcuts(self) -> None:
+        self.master.bind_all("<Control-s>", self._on_save_shortcut)
+        self.master.bind_all("<Control-S>", self._on_save_shortcut)
+        self.master.bind_all("<Control-o>", self._on_open_shortcut)
+        self.master.bind_all("<Control-O>", self._on_open_shortcut)
+
+    def _on_save_shortcut(self, _event: tk.Event) -> str:
+        self._save_project_json()
+        return "break"
+
+    def _on_open_shortcut(self, _event: tk.Event) -> str:
+        self._open_project_json()
+        return "break"
 
     def _log_message(self, msg: str) -> None:
         """Append a line to the messages panel and update status bar."""

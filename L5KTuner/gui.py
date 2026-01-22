@@ -943,7 +943,7 @@ class L5KTunerApp:
         return lines
 
     # ---------------- Selection / Info ----------------
-    def _on_tree_select(self, _event: tk.Event) -> None:
+    def _on_tree_select(self, _event: tk.Event | None = None) -> None:
         sel = self.tree.selection()
         if not sel:
             return

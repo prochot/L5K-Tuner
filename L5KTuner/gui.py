@@ -235,10 +235,13 @@ class L5KTunerApp:
         frame = tk.Frame(win)
         frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=4)
 
-        added_box = tk.Listbox(frame, height=8, selectmode=tk.MULTIPLE, exportselection=False)
+        added_frame = tk.Frame(frame)
+        removed_frame = tk.Frame(frame)
+
+        added_box = tk.Listbox(added_frame, height=8, selectmode=tk.MULTIPLE, exportselection=False)
         for k in added:
             added_box.insert(tk.END, " / ".join(filter(None, k)))
-        removed_box = tk.Listbox(frame, height=8, selectmode=tk.MULTIPLE, exportselection=False)
+        removed_box = tk.Listbox(removed_frame, height=8, selectmode=tk.MULTIPLE, exportselection=False)
         for k in removed:
             removed_box.insert(tk.END, " / ".join(filter(None, k)))
         # preselect all by default
@@ -247,11 +250,39 @@ class L5KTunerApp:
 
         tk.Label(frame, text="Added").grid(row=0, column=0, sticky="w")
         tk.Label(frame, text="Removed").grid(row=0, column=1, sticky="w")
-        added_box.grid(row=1, column=0, sticky="nsew", padx=(0, 6))
-        removed_box.grid(row=1, column=1, sticky="nsew")
+        added_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 6))
+        removed_frame.grid(row=1, column=1, sticky="nsew")
+
+        added_scroll = ttk.Scrollbar(added_frame, orient="vertical")
+        removed_scroll = ttk.Scrollbar(removed_frame, orient="vertical")
+
+        def toggle_added_scroll(first, last) -> None:
+            added_scroll.set(first, last)
+            if float(first) <= 0.0 and float(last) >= 1.0:
+                added_scroll.pack_forget()
+            elif not added_scroll.winfo_ismapped():
+                added_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        def toggle_removed_scroll(first, last) -> None:
+            removed_scroll.set(first, last)
+            if float(first) <= 0.0 and float(last) >= 1.0:
+                removed_scroll.pack_forget()
+            elif not removed_scroll.winfo_ismapped():
+                removed_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        added_box.configure(yscrollcommand=toggle_added_scroll)
+        removed_box.configure(yscrollcommand=toggle_removed_scroll)
+        added_scroll.configure(command=added_box.yview)
+        removed_scroll.configure(command=removed_box.yview)
+
+        added_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        removed_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         frame.columnconfigure(0, weight=1)
         frame.columnconfigure(1, weight=1)
         frame.rowconfigure(1, weight=1)
+
+        toggle_added_scroll(*added_box.yview())
+        toggle_removed_scroll(*removed_box.yview())
 
         def update_counts(event: Optional[tk.Event] = None) -> None:  # noqa: ARG001
             summary_var.set(

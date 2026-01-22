@@ -3,6 +3,12 @@
 ## Unreleased
 - (none)
 
+## 0.1.2 - 2026-01-22
+- Added include/exclude counts for UDTs, AOIs, and tags, with live updates on selection changes.
+- Added dimmed styling for excluded tree items.
+- Merge preview lists now show scrollbars only when needed.
+- Added Ctrl+O/Ctrl+S shortcuts with menu accelerators.
+
 ## 0.1.1 - 2026-01-18
 - Added dirty tracking with save prompts on close/open/import and a title-bar indicator.
 - Auto-maximizes the window on small screens (1024x768 or smaller).

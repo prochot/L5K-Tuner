@@ -1,6 +1,6 @@
 # L5K Tuner
 
-GUI tool for importing Rockwell Logix `.l5k` files, inspecting and pruning tags/UDTs/AOIs/program tags, and exporting filtered content. It also normalizes nested AOI/UDT member datatypes to base types so AVEVA Edge can import them correctly. Supports saving/loading project state (`.l5kproj`), merge previews for updated L5K files, and basic logging.
+Utility to edit Rockwell Studio 5000 .L5K files for use with AVEVA Edge (formerly Indusoft Web Studio) tag integration. Automatically resolves nested parameters to base types and allows for selective pruning of AOI parameters, UDT members, and tags, helping to manage tag count to stay within license limits.
 
 ## Features
 - Import `.l5k` files and display header, UDTs, AOIs, controller tags, and program tags in a tree with include/exclude controls.

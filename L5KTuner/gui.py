@@ -12,9 +12,11 @@ from tkinter import filedialog, messagebox, ttk, scrolledtext
 from typing import Dict, Optional, Any, Set
 import os
 import logging
+import webbrowser
 import concurrent.futures
 
 from . import models
+from . import __version__ as APP_VERSION
 from .models import MemberType
 from . import l5k_parser as l5kp
 from .tree_state import TreeState, TreeNodeMeta
@@ -22,6 +24,8 @@ from .view_filter import apply_filter
 from .utils import get_log_path
 
 logger = logging.getLogger(__name__)
+APP_NAME = "L5K Tuner"
+GITHUB_URL = "https://github.com/prochot/L5K-Tuner"
 
 
 class L5KTunerApp:
@@ -162,6 +166,8 @@ class L5KTunerApp:
 
         help_menu = tk.Menu(menubar, tearoff=0)
         help_menu.add_command(label="Show Log", command=self._show_log)
+        help_menu.add_separator()
+        help_menu.add_command(label="About...", command=self._show_about)
         menubar.add_cascade(label="Help", menu=help_menu)
 
         self.master.config(menu=menubar)
@@ -239,7 +245,7 @@ class L5KTunerApp:
             mx, my = self.master.winfo_rootx(), self.master.winfo_rooty()
             w, h = win.winfo_width(), win.winfo_height()
             x = mx + max((mw - w) // 2, 0)
-            y = my + max((mh - h) // 2, 0)
+            y = my + max((mh - h) // 3, 0)
             win.geometry(f"{w}x{h}+{x}+{y}")
         except Exception:
             pass
@@ -630,6 +636,44 @@ class L5KTunerApp:
         txt.configure(yscrollcommand=ysb.set)
         status = ttk.Label(win, text=f"Log file: {log_path}", anchor="w")
         status.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=(0, 6))
+
+    def _show_about(self) -> None:
+        win = tk.Toplevel(self.master)
+        win.title("About")
+        win.resizable(False, False)
+        win.transient(self.master)
+        win.grab_set()
+
+        container = tk.Frame(win, padx=14, pady=12)
+        container.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(container, text=APP_NAME, font=("TkDefaultFont", 11, "bold")).pack(anchor="w")
+        ttk.Label(container, text=f"Version {APP_VERSION}").pack(anchor="w")
+        ttk.Label(container, text="© 2025-2026 Alex Prochot").pack(anchor="w", pady=(4, 10))
+
+        url_label = ttk.Label(container, text=GITHUB_URL, foreground="#2a5db0", cursor="hand2")
+        url_label.pack(anchor="w", pady=(0, 10))
+        url_label.bind("<Button-1>", lambda _evt: webbrowser.open(GITHUB_URL))
+
+        btns = tk.Frame(container)
+        btns.pack(fill=tk.X)
+        ttk.Button(btns, text="Close", command=win.destroy).pack(side=tk.RIGHT)
+
+        self.master.update_idletasks()
+        win.update_idletasks()
+        try:
+            mw, mh = self.master.winfo_width(), self.master.winfo_height()
+            if mw <= 1 or mh <= 1:
+                mw, mh = self.master.winfo_reqwidth(), self.master.winfo_reqheight()
+            mx, my = self.master.winfo_rootx(), self.master.winfo_rooty()
+            w, h = win.winfo_width(), win.winfo_height()
+            if w <= 1 or h <= 1:
+                w, h = win.winfo_reqwidth(), win.winfo_reqheight()
+            x = mx + max((mw - w) // 2, 0)
+            y = my + max(int((mh - h) * 0.33), 0)
+            win.geometry(f"{w}x{h}+{x}+{y}")
+        except Exception:
+            pass
 
     def _close_project(self) -> None:
         if not self._confirm_discard_changes("closing the project"):

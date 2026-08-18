@@ -3,6 +3,14 @@
 ## Unreleased
 - (none)
 
+## 0.2.0 - 2026-08-18
+- Redesigned the merge preview with ordered, parent-grouped entries; explicit Add, Remove, and Export controls; bulk actions; and Shift/Ctrl multi-selection.
+- Added per-item export choices for merged entries, using existing application defaults for AOI local tags, EnableIn, and EnableOut.
+- Automatically creates required UDT, AOI, and program parents for selected additions and removes parent containers that would otherwise be empty.
+- Added bold highlighting for newly merged tree items until the project is saved and alphabetized sibling items in the tree display.
+- Fixed filtering so checkbox states, expanded branches, selection, and scroll position are preserved when switching between All, Enabled, and Disabled views.
+- Added an About dialog with application version, copyright information, and a link to the GitHub project.
+
 ## 0.1.2 - 2026-01-22
 - Added include/exclude counts for UDTs, AOIs, and tags, with live updates on selection changes.
 - Added dimmed styling for excluded tree items.

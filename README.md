@@ -6,8 +6,9 @@ Utility to edit Rockwell Studio 5000 .L5K files for use with AVEVA Edge (formerl
 - Import `.l5k` files and display header, UDTs, AOIs, controller tags, and program tags in a tree with include/exclude controls.
 - Export a filtered `.l5k` based on current selections.
 - Save/Load project state to `.l5kproj` (restores selections and descriptions without needing the original `.l5k`).
-- Merge updated `.l5k` files with a preview and per-item add/remove selection.
-- View filters: show all, enabled-only, or disabled-only items.
+- Merge updated `.l5k` files with ordered differences, bulk add/remove controls, and per-item export selection.
+- Identify newly merged tree items with bold text until the project is saved.
+- View filters: show all, enabled-only, or disabled-only items while preserving tree expansion, selection, and position.
 - Prompt to save project changes before closing, opening another project, or importing a new file.
 - Log viewer (Help -> Show Log) and status/title updates that reflect the current file.
 
@@ -37,7 +38,7 @@ If installed via the Windows installer, launch from the Start Menu.
 - File -> Export: write a filtered `.l5k` with only selected items.
 - File -> Save / Save As: save project state to `.l5kproj` (includes selections/descriptions).
 - File -> Open: reload a saved `.l5kproj` without the original `.l5k`.
-- File -> Merge Updated L5K: preview differences against the current project and choose which additions/removals to apply.
+- File -> Merge Updated L5K: preview differences, choose additions/removals, and control whether added items are included in exports.
 - View -> Show: filter the tree (all/enabled/disabled).
 - Help -> Show Log: open the log viewer.
 

@@ -9,5 +9,6 @@ icon-concepts/
 *.l5kproj
 *.spec
 *.iss
+!installer.iss
 *.png
 !requirements.txt

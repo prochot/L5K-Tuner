@@ -40,6 +40,13 @@ def test_merge_export_defaults_match_main_tree_defaults():
     assert L5KTunerApp._default_merge_export_state(("PROGRAM_TAG", "EnableIn", "MainProgram"))
 
 
+def test_merge_export_requires_item_to_be_added():
+    assert L5KTunerApp._effective_merge_export_state(True, True)
+    assert not L5KTunerApp._effective_merge_export_state(True, False)
+    assert not L5KTunerApp._effective_merge_export_state(False, True)
+    assert not L5KTunerApp._effective_merge_export_state(False, False)
+
+
 def test_merge_export_states_map_program_tags_to_main_tree_keys():
     class FlatTree:
         def parent(self, _item_id):

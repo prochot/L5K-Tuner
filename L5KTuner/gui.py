@@ -274,6 +274,10 @@ class L5KTunerApp:
         return True
 
     @staticmethod
+    def _effective_merge_export_state(add_state: bool, export_state: bool) -> bool:
+        return add_state and export_state
+
+    @staticmethod
     def _tree_key_for_merge_item(
         item: tuple[str, str, Optional[str]]
     ) -> tuple[str, str, Optional[str]]:
@@ -433,10 +437,21 @@ class L5KTunerApp:
             return (clicked_row,)
 
         def set_added_state(rows: tuple[str, ...], column: str, state: bool) -> None:
-            states = added_apply if column == "add" else added_export
             for item_id in rows:
-                states[item_id] = state
-                added_table.set(item_id, column, CHECKED_MARK if state else UNCHECKED_MARK)
+                if column == "add":
+                    added_apply[item_id] = state
+                    added_table.set(item_id, "add", CHECKED_MARK if state else UNCHECKED_MARK)
+                    if not state:
+                        added_export[item_id] = False
+                        added_table.set(item_id, "export", UNCHECKED_MARK)
+                else:
+                    export_state = self._effective_merge_export_state(added_apply[item_id], state)
+                    added_export[item_id] = export_state
+                    added_table.set(
+                        item_id,
+                        "export",
+                        CHECKED_MARK if export_state else UNCHECKED_MARK,
+                    )
             update_counts()
 
         def set_removed_state(rows: tuple[str, ...], state: bool) -> None:

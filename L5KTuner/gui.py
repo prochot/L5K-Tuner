@@ -224,6 +224,29 @@ class L5KTunerApp:
                 keys.add(("PROGRAM_TAG", tname, pname))
         return keys
 
+    @staticmethod
+    def _merge_item_sort_key(item: tuple[str, str, Optional[str]]) -> tuple[int, str, int, str]:
+        kind, name, parent = item
+        group_order = {
+            "UDT": (0, 0),
+            "UDT_MEMBER": (0, 1),
+            "AOI": (1, 0),
+            "AOI_PARAMETER": (1, 1),
+            "AOI_LOCAL_TAG": (1, 2),
+            "TAG": (2, 0),
+            "PROGRAM_TAG": (3, 0),
+        }
+        group, child_order = group_order.get(kind, (4, 0))
+        owner = parent or name
+        return group, owner.casefold(), child_order, name.casefold()
+
+    @staticmethod
+    def _format_merge_item(item: tuple[str, str, Optional[str]]) -> str:
+        kind, name, parent = item
+        if parent:
+            return f"{parent} / {kind} / {name}"
+        return f"{kind} / {name}"
+
     def _show_merge_preview(self, file_path: str, new_project: models.L5KProject, new_parser: l5kp.L5KParser,
                             corrected_log: list[str], saved_states: list[dict[str, Any]],
                             added: list[tuple[str, str, Optional[str]]], removed: list[tuple[str, str, Optional[str]]]) -> None:
@@ -263,10 +286,10 @@ class L5KTunerApp:
 
         added_box = tk.Listbox(added_frame, height=8, selectmode=tk.MULTIPLE, exportselection=False)
         for k in added:
-            added_box.insert(tk.END, " / ".join(filter(None, k)))
+            added_box.insert(tk.END, self._format_merge_item(k))
         removed_box = tk.Listbox(removed_frame, height=8, selectmode=tk.MULTIPLE, exportselection=False)
         for k in removed:
-            removed_box.insert(tk.END, " / ".join(filter(None, k)))
+            removed_box.insert(tk.END, self._format_merge_item(k))
         # preselect all by default
         added_box.selection_set(0, tk.END)
         removed_box.selection_set(0, tk.END)
@@ -1294,8 +1317,8 @@ class L5KTunerApp:
             return
 
         new_keys = self._keys_for_project(new_project)
-        added = sorted(new_keys - previous_keys)
-        removed = sorted(previous_keys - new_keys)
+        added = sorted(new_keys - previous_keys, key=self._merge_item_sort_key)
+        removed = sorted(previous_keys - new_keys, key=self._merge_item_sort_key)
         self._show_merge_preview(
             file_path=file_path,
             new_project=new_project,

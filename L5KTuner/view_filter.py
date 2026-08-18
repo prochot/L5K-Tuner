@@ -41,8 +41,6 @@ def apply_filter(tree, state: TreeState, mode: str) -> None:
             prune(ch)
         if iid not in keep:
             tree.delete(iid)
-            state.meta.pop(iid, None)
-            state.checks.pop(iid, None)
 
     for root in list(tree.get_children("")):
         prune(root)

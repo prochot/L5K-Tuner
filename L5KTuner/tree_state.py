@@ -95,6 +95,8 @@ class TreeState:
             anchor = None
 
         for iid in list(self.meta.keys()):
+            if hasattr(tree, "exists") and not tree.exists(iid):
+                continue
             parent = tree.parent(iid)
             while parent:
                 child_states = [self.get_checked(ch, False) for ch in tree.get_children(parent)]

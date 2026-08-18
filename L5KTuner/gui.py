@@ -1027,6 +1027,8 @@ class L5KTunerApp:
             self._set_tree_item_tag(iid, checked)
 
     def _set_tree_item_tag(self, item_id: str, state: bool) -> None:
+        if hasattr(self.tree, "exists") and not self.tree.exists(item_id):
+            return
         tags = ["included" if state else "excluded"]
         key = self.tree_state.logical_key_for_iid(item_id)
         if key in self._newly_merged_keys:
@@ -1052,12 +1054,12 @@ class L5KTunerApp:
         self.tree_state.set_meta(udt_root, TreeNodeMeta(MemberType.ROOT_UDT, "User-Defined Types"))
         self.tree_state.set_checked(udt_root, True)
 
-        for udt in project.udts.values():
+        for udt in sorted(project.udts.values(), key=lambda item: item.name.casefold()):
             udt_id = self.tree.insert(udt_root, "end", text=udt.name, open=False)
             self.tree_state.set_meta(udt_id, TreeNodeMeta(MemberType.UDT, udt.name))
             self.tree_state.set_checked(udt_id, True)
 
-            for member in udt.members.values():
+            for member in sorted(udt.members.values(), key=lambda item: item.name.casefold()):
                 if getattr(member, "parent_word", None):
                     continue
                 mlabel = member.display_name() if hasattr(member, "display_name") else member.name
@@ -1065,7 +1067,10 @@ class L5KTunerApp:
                 self.tree_state.set_meta(m_id, TreeNodeMeta(MemberType.UDT_MEMBER, member.name, parent=udt.name))
                 self.tree_state.set_checked(m_id, (member.name not in ("EnableIn", "EnableOut")))
 
-                for child in getattr(member, "children", {}).values():
+                for child in sorted(
+                    getattr(member, "children", {}).values(),
+                    key=lambda item: item.name.casefold(),
+                ):
                     clabel = child.display_name() if hasattr(child, "display_name") else child.name
                     c_id = self.tree.insert(m_id, "end", text=f"{clabel} : {child.data_type}", open=False)
                     self.tree_state.set_meta(c_id, TreeNodeMeta(MemberType.UDT_MEMBER, child.name, parent=udt.name))
@@ -1079,7 +1084,7 @@ class L5KTunerApp:
         self.tree_state.set_meta(aoi_root, TreeNodeMeta(MemberType.ROOT_AOI, "Add-On Instructions"))
         self.tree_state.set_checked(aoi_root, True)
 
-        for aoi in project.aois.values():
+        for aoi in sorted(project.aois.values(), key=lambda item: item.name.casefold()):
             aoi_id = self.tree.insert(aoi_root, "end", text=aoi.name, open=False)
             self.tree_state.set_meta(aoi_id, TreeNodeMeta(MemberType.AOI, aoi.name))
             self.tree_state.set_checked(aoi_id, True)
@@ -1089,7 +1094,7 @@ class L5KTunerApp:
                 self.tree_state.set_meta(params_head, TreeNodeMeta(MemberType.PARAMS_HEADER, f"{aoi.name} Parameters"))
                 self.tree_state.set_checked(params_head, True)
 
-                for param in aoi.parameters.values():
+                for param in sorted(aoi.parameters.values(), key=lambda item: item.name.casefold()):
                     pid = self.tree.insert(params_head, "end", text=f"{param.name} : {param.data_type}", open=False)
                     self.tree_state.set_meta(pid, TreeNodeMeta(MemberType.AOI_PARAMETER, param.name, parent=aoi.name))
                     self.tree_state.set_checked(pid, (param.name not in ("EnableIn", "EnableOut")))
@@ -1099,7 +1104,7 @@ class L5KTunerApp:
                 self.tree_state.set_meta(locals_head, TreeNodeMeta(MemberType.LOCALS_HEADER, f"{aoi.name} Local Tags"))
                 self.tree_state.set_checked(locals_head, False)
 
-                for local in aoi.localtags.values():
+                for local in sorted(aoi.localtags.values(), key=lambda item: item.name.casefold()):
                     lid = self.tree.insert(locals_head, "end", text=f"{local.name} : {local.data_type}", open=False)
                     self.tree_state.set_meta(lid, TreeNodeMeta(MemberType.AOI_LOCAL_TAG, local.name, parent=aoi.name))
                     self.tree_state.set_checked(lid, False)
@@ -1112,7 +1117,7 @@ class L5KTunerApp:
         self.tree_state.set_meta(tag_root, TreeNodeMeta(MemberType.ROOT_CONTROLLER_TAGS, "Controller Tags"))
         self.tree_state.set_checked(tag_root, True)
 
-        for tag in project.tags.values():
+        for tag in sorted(project.tags.values(), key=lambda item: item.name.casefold()):
             tag_id = self.tree.insert(tag_root, "end", text=f"{tag.name} : {tag.data_type}", open=False)
             self.tree_state.set_meta(tag_id, TreeNodeMeta(MemberType.TAG, tag.name))
             self.tree_state.set_checked(tag_id, True)
@@ -1121,14 +1126,14 @@ class L5KTunerApp:
         project = self.project
         if not project:
             return
-        for prog_name, prog in project.programs.items():
+        for prog_name, prog in sorted(project.programs.items(), key=lambda item: item[0].casefold()):
             if not prog.tags:
                 continue
             prog_root = self.tree.insert("", "end", text=f"{prog_name} Tags", open=False)
             self.tree_state.set_meta(prog_root, TreeNodeMeta(MemberType.ROOT_PROGRAM_TAGS, prog_name))
             self.tree_state.set_checked(prog_root, True)
 
-            for tag in prog.tags.values():
+            for tag in sorted(prog.tags.values(), key=lambda item: item.name.casefold()):
                 pid = self.tree.insert(prog_root, "end", text=f"{tag.name} : {tag.data_type}", open=False)
                 self.tree_state.set_meta(pid, TreeNodeMeta(MemberType.TAG, tag.name, parent=prog_name))
                 self.tree_state.set_checked(pid, True)

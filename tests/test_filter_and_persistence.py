@@ -42,9 +42,12 @@ def test_filter_modes_all_enabled_disabled():
     total_items = len(app.tree.get_children(""))
 
     # Disable a tag and apply "enabled" filter
+    disabled_key = (models.MemberType.TAG.name, "T2", None)
+    app._newly_merged_keys.add(disabled_key)
     for iid, meta in app.tree_state.meta.items():
         if meta.node_type == models.MemberType.TAG and meta.name == "T2":
             app.tree_state.set_checked(iid, False)
+            app._set_tree_item_tag(iid, False)
             break
 
     # Disabled filter first: should show items that include unchecked nodes
@@ -60,6 +63,54 @@ def test_filter_modes_all_enabled_disabled():
     # Back to all restores everything
     app._set_filter_mode("all")
     assert len(app.tree.get_children("")) == total_items
+
+    restored_id = next(
+        item_id
+        for item_id, meta in app.tree_state.meta.items()
+        if meta.node_type == models.MemberType.TAG and meta.name == "T2" and meta.parent is None
+    )
+    assert not app.tree_state.get_checked(restored_id)
+    assert set(app.tree.item(restored_id, "tags")) == {"excluded", "new"}
+
+
+def test_tree_sibling_items_are_alphabetical():
+    app = _build_app_with_project()
+    project = app.project
+    assert project is not None
+
+    project.tags.clear()
+    project.tags["Zulu"] = models.Tag("Zulu", "BOOL")
+    project.tags["alpha"] = models.Tag("alpha", "BOOL")
+
+    udt = project.udts["U"]
+    udt.members.clear()
+    udt.add_member(models.UDTMember("ZuluMember", "BOOL"))
+    udt.add_member(models.UDTMember("alphaMember", "BOOL"))
+
+    app._populate_tree()
+
+    controller_root = next(
+        item_id
+        for item_id, meta in app.tree_state.meta.items()
+        if meta.node_type == models.MemberType.ROOT_CONTROLLER_TAGS
+    )
+    controller_names = [
+        app.tree_state.get_meta(item_id).name
+        for item_id in app.tree.get_children(controller_root)
+    ]
+
+    udt_id = next(
+        item_id
+        for item_id, meta in app.tree_state.meta.items()
+        if meta.node_type == models.MemberType.UDT and meta.name == "U"
+    )
+    member_names = [
+        app.tree_state.get_meta(item_id).name
+        for item_id in app.tree.get_children(udt_id)
+    ]
+
+    assert controller_names == ["alpha", "Zulu"]
+    assert member_names == ["alphaMember", "ZuluMember"]
 
 
 def test_project_save_load_round_trip(tmp_path):

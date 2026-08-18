@@ -64,6 +64,10 @@ class L5KTunerApp:
         self._saved_snapshot: Optional[str] = None
         self._dirty: bool = False
         self._newly_merged_keys: set[tuple[str, str, Optional[str]]] = set()
+        self._tree_open_states: dict[tuple[str, str, Optional[str]], bool] = {}
+        self._tree_selections: dict[str, tuple[tuple[str, str, Optional[str]], ...]] = {}
+        self._tree_focus: dict[str, Optional[tuple[str, str, Optional[str]]]] = {}
+        self._tree_scroll_positions: dict[str, float] = {}
 
         self._create_widgets()
         self._set_selection_controls_enabled(False)
@@ -839,6 +843,7 @@ class L5KTunerApp:
             self.project = project
             self.parser = parser
             self._newly_merged_keys.clear()
+            self._reset_tree_navigation_state()
             self._populate_tree()
             self._restore_checkbox_states(data.get("checkbox_states", []))
             base = os.path.basename(file_path)
@@ -947,6 +952,7 @@ class L5KTunerApp:
         self._saved_snapshot = None
         self._dirty = False
         self._newly_merged_keys.clear()
+        self._reset_tree_navigation_state()
         self._set_status("Ready", None)
         self._set_window_title(None)
         logger.info("Closed file/project: %s", closed_label)
@@ -980,6 +986,7 @@ class L5KTunerApp:
             # Adopt the new project so the UI repopulates with fresh data
             self.project = project
             self._newly_merged_keys.clear()
+            self._reset_tree_navigation_state()
 
             # Keep self.parser in sync so export/save paths keep working
             parser_inst = self.parser
@@ -1801,10 +1808,83 @@ class L5KTunerApp:
         self.status_label.config(text=label)
 
     def _set_filter_mode(self, mode: str) -> None:
+        previous_mode = self._filter_mode
+        fallback_selection, fallback_focus, fallback_scroll = self._capture_tree_navigation(previous_mode)
         saved = self._serialize_checkbox_states()
         self._filter_mode = mode
         self._filter_var.set(mode)
         self._populate_tree(saved_states=saved)
+        self._restore_tree_navigation(mode, fallback_selection, fallback_focus, fallback_scroll)
+
+    def _capture_tree_navigation(
+        self, mode: str
+    ) -> tuple[
+        tuple[tuple[str, str, Optional[str]], ...],
+        Optional[tuple[str, str, Optional[str]]],
+        float,
+    ]:
+        for item_id in self.tree_state.meta:
+            if not self.tree.exists(item_id):
+                continue
+            key = self.tree_state.logical_key_for_iid(item_id)
+            if key:
+                self._tree_open_states[key] = bool(self.tree.item(item_id, "open"))
+
+        selection = tuple(
+            key
+            for item_id in self.tree.selection()
+            if (key := self.tree_state.logical_key_for_iid(item_id)) is not None
+        )
+        focus_id = self.tree.focus()
+        focus = self.tree_state.logical_key_for_iid(focus_id) if focus_id else None
+        scroll = self.tree.yview()[0] if self.tree.yview() else 0.0
+
+        self._tree_selections[mode] = selection
+        self._tree_focus[mode] = focus
+        self._tree_scroll_positions[mode] = scroll
+        return selection, focus, scroll
+
+    def _restore_tree_navigation(
+        self,
+        mode: str,
+        fallback_selection: tuple[tuple[str, str, Optional[str]], ...],
+        fallback_focus: Optional[tuple[str, str, Optional[str]]],
+        fallback_scroll: float,
+    ) -> None:
+        for key, is_open in self._tree_open_states.items():
+            item_id = self.tree_state.iid_for_logical_key(key)
+            if item_id and self.tree.exists(item_id):
+                self.tree.item(item_id, open=is_open)
+
+        desired_selection = self._tree_selections.get(mode, fallback_selection)
+        selected_ids = tuple(
+            item_id
+            for key in desired_selection
+            if (item_id := self.tree_state.iid_for_logical_key(key)) and self.tree.exists(item_id)
+        )
+        if selected_ids:
+            self.tree.selection_set(selected_ids)
+
+        desired_focus = self._tree_focus.get(mode, fallback_focus)
+        focus_id = self.tree_state.iid_for_logical_key(desired_focus) if desired_focus else None
+        if not focus_id or not self.tree.exists(focus_id):
+            focus_id = selected_ids[0] if selected_ids else None
+        if focus_id:
+            self.tree.focus(focus_id)
+
+        self.selected_item_id = selected_ids[0] if selected_ids else None
+        if self.selected_item_id:
+            self._on_tree_select(None)
+
+        self.master.update_idletasks()
+        scroll = self._tree_scroll_positions.get(mode, fallback_scroll)
+        self.tree.yview_moveto(scroll)
+
+    def _reset_tree_navigation_state(self) -> None:
+        self._tree_open_states.clear()
+        self._tree_selections.clear()
+        self._tree_focus.clear()
+        self._tree_scroll_positions.clear()
 
     def _apply_filter(self) -> None:
         apply_filter(self.tree, self.tree_state, self._filter_mode)

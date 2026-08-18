@@ -44,11 +44,21 @@ def test_filter_modes_all_enabled_disabled():
     # Disable a tag and apply "enabled" filter
     disabled_key = (models.MemberType.TAG.name, "T2", None)
     app._newly_merged_keys.add(disabled_key)
+    controller_root = None
+    disabled_item = None
     for iid, meta in app.tree_state.meta.items():
+        if meta.node_type == models.MemberType.ROOT_CONTROLLER_TAGS:
+            controller_root = iid
         if meta.node_type == models.MemberType.TAG and meta.name == "T2":
+            disabled_item = iid
             app.tree_state.set_checked(iid, False)
             app._set_tree_item_tag(iid, False)
-            break
+    assert controller_root is not None
+    assert disabled_item is not None
+    app.tree.item(controller_root, open=True)
+    app.tree.selection_set(disabled_item)
+    app.tree.focus(disabled_item)
+    app._on_tree_select(None)
 
     # Disabled filter first: should show items that include unchecked nodes
     app._set_filter_mode("disabled")
@@ -71,6 +81,13 @@ def test_filter_modes_all_enabled_disabled():
     )
     assert not app.tree_state.get_checked(restored_id)
     assert set(app.tree.item(restored_id, "tags")) == {"excluded", "new"}
+    restored_root = next(
+        item_id
+        for item_id, meta in app.tree_state.meta.items()
+        if meta.node_type == models.MemberType.ROOT_CONTROLLER_TAGS
+    )
+    assert app.tree.item(restored_root, "open")
+    assert app.tree.selection() == (restored_id,)
 
 
 def test_tree_sibling_items_are_alphabetical():

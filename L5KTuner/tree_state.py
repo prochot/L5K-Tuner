@@ -55,6 +55,9 @@ class TreeState:
             return None
         return (meta.node_type.name, meta.name, meta.parent)
 
+    def iid_for_logical_key(self, key: tuple[str, str, Optional[str]]) -> Optional[str]:
+        return self._key_index.get(key)
+
     def serialize(self) -> list[dict[str, Any]]:
         """Serialize checkbox state with logical keys for persistence."""
         out: list[dict[str, Any]] = []

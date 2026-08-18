@@ -26,6 +26,8 @@ from .utils import get_log_path
 logger = logging.getLogger(__name__)
 APP_NAME = "L5K Tuner"
 GITHUB_URL = "https://github.com/prochot/L5K-Tuner"
+CHECKED_MARK = "☑"
+UNCHECKED_MARK = "☐"
 
 
 class L5KTunerApp:
@@ -254,6 +256,29 @@ class L5KTunerApp:
         child_items = (item for item in items if item[0] not in {"UDT", "AOI"})
         return sorted(child_items, key=cls._merge_item_sort_key)
 
+    @staticmethod
+    def _default_merge_export_state(item: tuple[str, str, Optional[str]]) -> bool:
+        kind, name, _parent = item
+        if kind == "AOI_LOCAL_TAG":
+            return False
+        if kind in {"UDT_MEMBER", "AOI_PARAMETER"} and name in {"EnableIn", "EnableOut"}:
+            return False
+        return True
+
+    def _apply_merged_export_states(
+        self, export_states: dict[tuple[str, str, Optional[str]], bool]
+    ) -> None:
+        normalized_states = {
+            (("TAG" if kind == "PROGRAM_TAG" else kind), name, parent): state
+            for (kind, name, parent), state in export_states.items()
+        }
+        for item_id in self.tree_state.meta:
+            key = self.tree_state.logical_key_for_iid(item_id)
+            if key in normalized_states:
+                self.tree_state.set_checked(item_id, normalized_states[key])
+        self.tree_state.update_parent_states(self.tree, None)
+        self._apply_tree_tags()
+
     def _show_merge_preview(self, file_path: str, new_project: models.L5KProject, new_parser: l5kp.L5KParser,
                             corrected_log: list[str], saved_states: list[dict[str, Any]],
                             added: list[tuple[str, str, Optional[str]]], removed: list[tuple[str, str, Optional[str]]]) -> None:
@@ -262,7 +287,7 @@ class L5KTunerApp:
         """
         win = tk.Toplevel(self.master)
         win.title("Merge Preview")
-        win.geometry("640x420")
+        win.geometry("820x440")
         win.transient(self.master)
         win.grab_set()
 
@@ -291,15 +316,57 @@ class L5KTunerApp:
         added_frame = tk.Frame(frame)
         removed_frame = tk.Frame(frame)
 
-        added_box = tk.Listbox(added_frame, height=8, selectmode=tk.MULTIPLE, exportselection=False)
-        for k in added:
-            added_box.insert(tk.END, self._format_merge_item(k))
-        removed_box = tk.Listbox(removed_frame, height=8, selectmode=tk.MULTIPLE, exportselection=False)
-        for k in removed:
-            removed_box.insert(tk.END, self._format_merge_item(k))
-        # preselect all by default
-        added_box.selection_set(0, tk.END)
-        removed_box.selection_set(0, tk.END)
+        added_table = ttk.Treeview(
+            added_frame,
+            columns=("add", "export", "item"),
+            show="headings",
+            selectmode="extended",
+            height=8,
+        )
+        added_table.heading("add", text="Add")
+        added_table.heading("export", text="Export")
+        added_table.heading("item", text="Item")
+        added_table.column("add", width=45, minwidth=45, stretch=False, anchor=tk.CENTER)
+        added_table.column("export", width=55, minwidth=55, stretch=False, anchor=tk.CENTER)
+        added_table.column("item", width=190, minwidth=100, stretch=True, anchor=tk.W)
+
+        removed_table = ttk.Treeview(
+            removed_frame,
+            columns=("remove", "item"),
+            show="headings",
+            selectmode="extended",
+            height=8,
+        )
+        removed_table.heading("remove", text="Remove")
+        removed_table.heading("item", text="Item")
+        removed_table.column("remove", width=60, minwidth=60, stretch=False, anchor=tk.CENTER)
+        removed_table.column("item", width=230, minwidth=100, stretch=True, anchor=tk.W)
+
+        added_rows: dict[str, tuple[str, str, Optional[str]]] = {}
+        added_apply: dict[str, bool] = {}
+        added_export: dict[str, bool] = {}
+        for index, item in enumerate(added):
+            item_id = f"added-{index}"
+            export_state = self._default_merge_export_state(item)
+            added_rows[item_id] = item
+            added_apply[item_id] = True
+            added_export[item_id] = export_state
+            added_table.insert(
+                "",
+                tk.END,
+                iid=item_id,
+                values=(CHECKED_MARK, CHECKED_MARK if export_state else UNCHECKED_MARK, self._format_merge_item(item)),
+            )
+
+        removed_rows: dict[str, tuple[str, str, Optional[str]]] = {}
+        removed_apply: dict[str, bool] = {}
+        for index, item in enumerate(removed):
+            item_id = f"removed-{index}"
+            removed_rows[item_id] = item
+            removed_apply[item_id] = True
+            removed_table.insert(
+                "", tk.END, iid=item_id, values=(CHECKED_MARK, self._format_merge_item(item))
+            )
 
         tk.Label(frame, text="Added").grid(row=0, column=0, sticky="w")
         tk.Label(frame, text="Removed").grid(row=0, column=1, sticky="w")
@@ -323,42 +390,157 @@ class L5KTunerApp:
             elif not removed_scroll.winfo_ismapped():
                 removed_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
-        added_box.configure(yscrollcommand=toggle_added_scroll)
-        removed_box.configure(yscrollcommand=toggle_removed_scroll)
-        added_scroll.configure(command=added_box.yview)
-        removed_scroll.configure(command=removed_box.yview)
+        added_table.configure(yscrollcommand=toggle_added_scroll)
+        removed_table.configure(yscrollcommand=toggle_removed_scroll)
+        added_scroll.configure(command=added_table.yview)
+        removed_scroll.configure(command=removed_table.yview)
 
-        added_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        removed_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        added_table.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        removed_table.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         frame.columnconfigure(0, weight=1)
         frame.columnconfigure(1, weight=1)
         frame.rowconfigure(1, weight=1)
 
-        toggle_added_scroll(*added_box.yview())
-        toggle_removed_scroll(*removed_box.yview())
+        toggle_added_scroll(*added_table.yview())
+        toggle_removed_scroll(*removed_table.yview())
 
         def update_counts(event: Optional[tk.Event] = None) -> None:  # noqa: ARG001
             summary_var.set(
-                f"Added: {len(added_box.curselection())}/{len(added)}    "
-                f"Removed: {len(removed_box.curselection())}/{len(removed)}"
+                f"Added: {sum(added_apply.values())}/{len(added)}    "
+                f"Removed: {sum(removed_apply.values())}/{len(removed)}"
             )
 
-        added_box.bind("<<ListboxSelect>>", update_counts)
-        removed_box.bind("<<ListboxSelect>>", update_counts)
+        def selected_rows(table: ttk.Treeview, clicked_row: str) -> tuple[str, ...]:
+            selection = table.selection()
+            if clicked_row in selection:
+                return selection
+            table.selection_set(clicked_row)
+            return (clicked_row,)
 
-        tk.Label(win, text="Select items to add/remove", anchor="w").pack(fill=tk.X, padx=8, pady=(4, 2))
+        def set_added_state(rows: tuple[str, ...], column: str, state: bool) -> None:
+            states = added_apply if column == "add" else added_export
+            for item_id in rows:
+                states[item_id] = state
+                added_table.set(item_id, column, CHECKED_MARK if state else UNCHECKED_MARK)
+            update_counts()
+
+        def set_removed_state(rows: tuple[str, ...], state: bool) -> None:
+            for item_id in rows:
+                removed_apply[item_id] = state
+                removed_table.set(item_id, "remove", CHECKED_MARK if state else UNCHECKED_MARK)
+            update_counts()
+
+        def on_added_click(event: tk.Event) -> Optional[str]:
+            item_id = added_table.identify_row(event.y)
+            column = added_table.identify_column(event.x)
+            if not item_id or column not in {"#1", "#2"}:
+                return None
+            state_column = "add" if column == "#1" else "export"
+            states = added_apply if state_column == "add" else added_export
+            set_added_state(selected_rows(added_table, item_id), state_column, not states[item_id])
+            return "break"
+
+        def on_removed_click(event: tk.Event) -> Optional[str]:
+            item_id = removed_table.identify_row(event.y)
+            if not item_id or removed_table.identify_column(event.x) != "#1":
+                return None
+            set_removed_state(selected_rows(removed_table, item_id), not removed_apply[item_id])
+            return "break"
+
+        def toggle_added_selection(_event: tk.Event) -> str:
+            rows = added_table.selection()
+            if rows:
+                set_added_state(rows, "add", not all(added_apply[item_id] for item_id in rows))
+            return "break"
+
+        def toggle_removed_selection(_event: tk.Event) -> str:
+            rows = removed_table.selection()
+            if rows:
+                set_removed_state(rows, not all(removed_apply[item_id] for item_id in rows))
+            return "break"
+
+        def restore_export_defaults() -> None:
+            for item_id, item in added_rows.items():
+                set_added_state((item_id,), "export", self._default_merge_export_state(item))
+
+        added_table.bind("<Button-1>", on_added_click)
+        removed_table.bind("<Button-1>", on_removed_click)
+        added_table.bind("<space>", toggle_added_selection)
+        removed_table.bind("<space>", toggle_removed_selection)
+
+        added_controls = ttk.Frame(frame)
+        added_controls.grid(row=2, column=0, sticky="w", padx=(0, 6), pady=(4, 0))
+        ttk.Label(added_controls, text="Add:").pack(side=tk.LEFT)
+        ttk.Button(
+            added_controls,
+            text="All",
+            width=5,
+            command=lambda: set_added_state(tuple(added_rows), "add", True),
+        ).pack(side=tk.LEFT, padx=(3, 1))
+        ttk.Button(
+            added_controls,
+            text="None",
+            width=5,
+            command=lambda: set_added_state(tuple(added_rows), "add", False),
+        ).pack(side=tk.LEFT, padx=(1, 8))
+        ttk.Label(added_controls, text="Export:").pack(side=tk.LEFT)
+        ttk.Button(
+            added_controls,
+            text="All",
+            width=5,
+            command=lambda: set_added_state(tuple(added_rows), "export", True),
+        ).pack(side=tk.LEFT, padx=(3, 1))
+        ttk.Button(
+            added_controls,
+            text="None",
+            width=5,
+            command=lambda: set_added_state(tuple(added_rows), "export", False),
+        ).pack(side=tk.LEFT, padx=1)
+        ttk.Button(
+            added_controls,
+            text="Defaults",
+            command=restore_export_defaults,
+        ).pack(side=tk.LEFT, padx=(1, 0))
+
+        removed_controls = ttk.Frame(frame)
+        removed_controls.grid(row=2, column=1, sticky="w", pady=(4, 0))
+        ttk.Label(removed_controls, text="Remove:").pack(side=tk.LEFT)
+        ttk.Button(
+            removed_controls,
+            text="All",
+            width=5,
+            command=lambda: set_removed_state(tuple(removed_rows), True),
+        ).pack(side=tk.LEFT, padx=(3, 1))
+        ttk.Button(
+            removed_controls,
+            text="None",
+            width=5,
+            command=lambda: set_removed_state(tuple(removed_rows), False),
+        ).pack(side=tk.LEFT, padx=1)
+
+        tk.Label(
+            win,
+            text="Use Shift or Ctrl to select multiple rows; clicking a checkbox applies it to all selected rows.",
+            anchor="w",
+        ).pack(fill=tk.X, padx=8, pady=(4, 2))
 
         btns = tk.Frame(win)
         btns.pack(fill=tk.X, padx=8, pady=8)
 
         def apply_merge():
-            selected_added = [added[i] for i in added_box.curselection()]
-            selected_removed = [removed[i] for i in removed_box.curselection()]
+            selected_added = [item for item_id, item in added_rows.items() if added_apply[item_id]]
+            selected_removed = [item for item_id, item in removed_rows.items() if removed_apply[item_id]]
+            export_states = {
+                item: added_export[item_id]
+                for item_id, item in added_rows.items()
+                if added_apply[item_id]
+            }
             self._apply_merge_changes(new_project, selected_added, selected_removed)
             base = os.path.basename(file_path)
             self._last_source_label = base
             self._set_window_title(file_path)
             self._populate_tree(saved_states=saved_states)
+            self._apply_merged_export_states(export_states)
             self._show_summary(corrected_log)
             self._set_selection_controls_enabled(True)
             self._update_dirty_flag()

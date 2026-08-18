@@ -1,5 +1,6 @@
 import L5KTuner.models as models
 from L5KTuner.gui import L5KTunerApp
+from L5KTuner.tree_state import TreeNodeMeta, TreeState
 
 
 def test_merge_items_omit_parents_and_follow_tree_group_order():
@@ -29,6 +30,36 @@ def test_merge_child_display_uses_parent_type_name_order():
 
     assert L5KTunerApp._format_merge_item(item) == "P_LLS / AOI_LOCAL_TAG / CantStart"
     assert L5KTunerApp._format_merge_item(("AOI", "P_LLS", None)) == "AOI / P_LLS"
+
+
+def test_merge_export_defaults_match_main_tree_defaults():
+    assert not L5KTunerApp._default_merge_export_state(("AOI_LOCAL_TAG", "Local", "P_LLS"))
+    assert not L5KTunerApp._default_merge_export_state(("AOI_PARAMETER", "EnableIn", "P_LLS"))
+    assert not L5KTunerApp._default_merge_export_state(("UDT_MEMBER", "EnableOut", "MotorData"))
+    assert L5KTunerApp._default_merge_export_state(("AOI_PARAMETER", "Run", "P_LLS"))
+    assert L5KTunerApp._default_merge_export_state(("PROGRAM_TAG", "EnableIn", "MainProgram"))
+
+
+def test_merge_export_states_map_program_tags_to_main_tree_keys():
+    class FlatTree:
+        def parent(self, _item_id):
+            return ""
+
+        def item(self, _item_id, **_kwargs):
+            return None
+
+    app = L5KTunerApp.__new__(L5KTunerApp)
+    app.tree = FlatTree()
+    app.tree_state = TreeState()
+    app.tree_state.set_meta(
+        "program-tag",
+        TreeNodeMeta(models.MemberType.TAG, "Alarm", parent="MainProgram"),
+    )
+    app.tree_state.set_checked("program-tag", True)
+
+    app._apply_merged_export_states({("PROGRAM_TAG", "Alarm", "MainProgram"): False})
+
+    assert not app.tree_state.get_checked("program-tag")
 
 
 def test_selected_children_create_only_their_required_parents():

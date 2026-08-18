@@ -51,6 +51,7 @@ def test_merge_export_states_map_program_tags_to_main_tree_keys():
     app = L5KTunerApp.__new__(L5KTunerApp)
     app.tree = FlatTree()
     app.tree_state = TreeState()
+    app._newly_merged_keys = set()
     app.tree_state.set_meta(
         "program-tag",
         TreeNodeMeta(models.MemberType.TAG, "Alarm", parent="MainProgram"),
@@ -60,6 +61,35 @@ def test_merge_export_states_map_program_tags_to_main_tree_keys():
     app._apply_merged_export_states({("PROGRAM_TAG", "Alarm", "MainProgram"): False})
 
     assert not app.tree_state.get_checked("program-tag")
+
+
+def test_new_highlight_combines_with_excluded_text_and_clears():
+    class FlatTree:
+        def __init__(self):
+            self.tags = {}
+
+        def item(self, item_id, **kwargs):
+            self.tags[item_id] = kwargs.get("tags")
+
+    item_key = ("AOI_LOCAL_TAG", "CantStart", "P_LLS")
+    app = L5KTunerApp.__new__(L5KTunerApp)
+    app.tree = FlatTree()
+    app.tree_state = TreeState()
+    app.tree_state.set_meta(
+        "local-tag",
+        TreeNodeMeta(models.MemberType.AOI_LOCAL_TAG, "CantStart", parent="P_LLS"),
+    )
+    app.tree_state.set_checked("local-tag", False)
+    app._newly_merged_keys = {item_key}
+
+    app._apply_tree_tags()
+
+    assert app.tree.tags["local-tag"] == ("excluded", "new")
+
+    app._clear_newly_merged_highlights()
+
+    assert not app._newly_merged_keys
+    assert app.tree.tags["local-tag"] == ("excluded",)
 
 
 def test_selected_children_create_only_their_required_parents():

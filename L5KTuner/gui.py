@@ -8,7 +8,7 @@
 import atexit
 import json
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk, scrolledtext
+from tkinter import filedialog, font as tkfont, messagebox, ttk, scrolledtext
 from typing import Dict, Optional, Any, Set
 import os
 import logging
@@ -63,6 +63,7 @@ class L5KTunerApp:
         self._filter_var = tk.StringVar(value=self._filter_mode)
         self._saved_snapshot: Optional[str] = None
         self._dirty: bool = False
+        self._newly_merged_keys: set[tuple[str, str, Optional[str]]] = set()
 
         self._create_widgets()
         self._set_selection_controls_enabled(False)
@@ -94,6 +95,9 @@ class L5KTunerApp:
         self.tree.pack(side=tk.LEFT, expand=True, fill=tk.BOTH)
         self.tree.tag_configure("excluded", foreground="#8a8a8a")
         self.tree.tag_configure("included", foreground="#111111")
+        self._new_item_font = tkfont.nametofont("TkDefaultFont").copy()
+        self._new_item_font.configure(weight="bold")
+        self.tree.tag_configure("new", font=self._new_item_font)
 
         sb = ttk.Scrollbar(left, orient="vertical", command=self.tree.yview)
         sb.pack(side=tk.RIGHT, fill=tk.Y)
@@ -265,12 +269,19 @@ class L5KTunerApp:
             return False
         return True
 
+    @staticmethod
+    def _tree_key_for_merge_item(
+        item: tuple[str, str, Optional[str]]
+    ) -> tuple[str, str, Optional[str]]:
+        kind, name, parent = item
+        return ("TAG" if kind == "PROGRAM_TAG" else kind), name, parent
+
     def _apply_merged_export_states(
         self, export_states: dict[tuple[str, str, Optional[str]], bool]
     ) -> None:
         normalized_states = {
-            (("TAG" if kind == "PROGRAM_TAG" else kind), name, parent): state
-            for (kind, name, parent), state in export_states.items()
+            self._tree_key_for_merge_item(item): state
+            for item, state in export_states.items()
         }
         for item_id in self.tree_state.meta:
             key = self.tree_state.logical_key_for_iid(item_id)
@@ -535,7 +546,13 @@ class L5KTunerApp:
                 for item_id, item in added_rows.items()
                 if added_apply[item_id]
             }
+            keys_before_merge = self._keys_for_project(self.project) if self.project else set()
             self._apply_merge_changes(new_project, selected_added, selected_removed)
+            if self.project:
+                added_keys = self._keys_for_project(self.project) - keys_before_merge
+                self._newly_merged_keys.update(
+                    self._tree_key_for_merge_item(item) for item in added_keys
+                )
             base = os.path.basename(file_path)
             self._last_source_label = base
             self._set_window_title(file_path)
@@ -770,6 +787,7 @@ class L5KTunerApp:
             self._set_window_title(file_path)
             self._log_message("Project saved.")
             logger.info("Saved project file: %s", file_path)
+            self._clear_newly_merged_highlights()
             self._set_saved_snapshot(data)
             return True
         except Exception as e:  # noqa: BLE001
@@ -820,6 +838,7 @@ class L5KTunerApp:
 
             self.project = project
             self.parser = parser
+            self._newly_merged_keys.clear()
             self._populate_tree()
             self._restore_checkbox_states(data.get("checkbox_states", []))
             base = os.path.basename(file_path)
@@ -927,6 +946,7 @@ class L5KTunerApp:
         self._last_project_path = None
         self._saved_snapshot = None
         self._dirty = False
+        self._newly_merged_keys.clear()
         self._set_status("Ready", None)
         self._set_window_title(None)
         logger.info("Closed file/project: %s", closed_label)
@@ -959,6 +979,7 @@ class L5KTunerApp:
             
             # Adopt the new project so the UI repopulates with fresh data
             self.project = project
+            self._newly_merged_keys.clear()
 
             # Keep self.parser in sync so export/save paths keep working
             parser_inst = self.parser
@@ -1006,7 +1027,17 @@ class L5KTunerApp:
             self._set_tree_item_tag(iid, checked)
 
     def _set_tree_item_tag(self, item_id: str, state: bool) -> None:
-        self.tree.item(item_id, tags=("included" if state else "excluded",))
+        tags = ["included" if state else "excluded"]
+        key = self.tree_state.logical_key_for_iid(item_id)
+        if key in self._newly_merged_keys:
+            tags.append("new")
+        self.tree.item(item_id, tags=tuple(tags))
+
+    def _clear_newly_merged_highlights(self) -> None:
+        if not self._newly_merged_keys:
+            return
+        self._newly_merged_keys.clear()
+        self._apply_tree_tags()
 
     def _add_header_node(self) -> None:
         header_id = self.tree.insert("", "end", text="L5K Header", open=False)

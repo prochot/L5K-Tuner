@@ -247,6 +247,13 @@ class L5KTunerApp:
             return f"{parent} / {kind} / {name}"
         return f"{kind} / {name}"
 
+    @classmethod
+    def _merge_preview_items(
+        cls, items: set[tuple[str, str, Optional[str]]]
+    ) -> list[tuple[str, str, Optional[str]]]:
+        child_items = (item for item in items if item[0] not in {"UDT", "AOI"})
+        return sorted(child_items, key=cls._merge_item_sort_key)
+
     def _show_merge_preview(self, file_path: str, new_project: models.L5KProject, new_parser: l5kp.L5KParser,
                             corrected_log: list[str], saved_states: list[dict[str, Any]],
                             added: list[tuple[str, str, Optional[str]]], removed: list[tuple[str, str, Optional[str]]]) -> None:
@@ -379,19 +386,25 @@ class L5KTunerApp:
 
         # Additions
         for kind, name, parent in selected_added:
-            if kind == "UDT" and name in new_project.udts:
-                project.udts[name] = new_project.udts[name]
-            elif kind == "UDT_MEMBER" and parent and parent in new_project.udts and parent in project.udts:
+            if kind == "UDT_MEMBER" and parent and parent in new_project.udts:
+                if parent not in project.udts:
+                    source_udt = new_project.udts[parent]
+                    project.udts[parent] = models.UDT(source_udt.name, source_udt.description)
+                    project.udts[parent].family_type = source_udt.family_type
                 member = new_project.udts[parent].members.get(name)
                 if member:
                     project.udts[parent].members[name] = member
-            elif kind == "AOI" and name in new_project.aois:
-                project.aois[name] = new_project.aois[name]
-            elif kind == "AOI_PARAMETER" and parent and parent in new_project.aois and parent in project.aois:
+            elif kind == "AOI_PARAMETER" and parent and parent in new_project.aois:
+                if parent not in project.aois:
+                    source_aoi = new_project.aois[parent]
+                    project.aois[parent] = models.AOI(source_aoi.name, source_aoi.description)
                 param = new_project.aois[parent].parameters.get(name)
                 if param:
                     project.aois[parent].parameters[name] = param
-            elif kind == "AOI_LOCAL_TAG" and parent and parent in new_project.aois and parent in project.aois:
+            elif kind == "AOI_LOCAL_TAG" and parent and parent in new_project.aois:
+                if parent not in project.aois:
+                    source_aoi = new_project.aois[parent]
+                    project.aois[parent] = models.AOI(source_aoi.name, source_aoi.description)
                 local = new_project.aois[parent].localtags.get(name)
                 if local:
                     project.aois[parent].localtags[name] = local
@@ -399,32 +412,45 @@ class L5KTunerApp:
                 project.tags[name] = new_project.tags[name]
             elif kind == "PROGRAM_TAG" and parent and parent in new_project.programs:
                 if parent not in project.programs:
-                    project.programs[parent] = new_project.programs[parent]
-                else:
-                    tag_obj = new_project.programs[parent].tags.get(name)
-                    if tag_obj:
-                        project.programs[parent].tags[name] = tag_obj
+                    source_program = new_project.programs[parent]
+                    project.programs[parent] = models.Program(source_program.name, source_program.description)
+                tag_obj = new_project.programs[parent].tags.get(name)
+                if tag_obj:
+                    project.programs[parent].tags[name] = tag_obj
 
         # Removals
+        affected_udts: set[str] = set()
+        affected_aois: set[str] = set()
+        affected_programs: set[str] = set()
         for kind, name, parent in selected_removed:
-            if kind == "UDT":
-                project.udts.pop(name, None)
-            elif kind == "UDT_MEMBER" and parent and parent in project.udts:
+            if kind == "UDT_MEMBER" and parent and parent in project.udts:
+                affected_udts.add(parent)
                 project.udts[parent].members.pop(name, None)
                 # also remove child from any hidden parent if present
                 for m in project.udts[parent].members.values():
                     if getattr(m, "children", None):
                         m.children.pop(name, None)
-            elif kind == "AOI":
-                project.aois.pop(name, None)
             elif kind == "AOI_PARAMETER" and parent and parent in project.aois:
+                affected_aois.add(parent)
                 project.aois[parent].parameters.pop(name, None)
             elif kind == "AOI_LOCAL_TAG" and parent and parent in project.aois:
+                affected_aois.add(parent)
                 project.aois[parent].localtags.pop(name, None)
             elif kind == "TAG":
                 project.tags.pop(name, None)
             elif kind == "PROGRAM_TAG" and parent and parent in project.programs:
+                affected_programs.add(parent)
                 project.programs[parent].tags.pop(name, None)
+
+        for parent in affected_udts:
+            if parent in project.udts and not project.udts[parent].members:
+                project.udts.pop(parent)
+        for parent in affected_aois:
+            if parent in project.aois and not project.aois[parent].parameters and not project.aois[parent].localtags:
+                project.aois.pop(parent)
+        for parent in affected_programs:
+            if parent in project.programs and not project.programs[parent].tags:
+                project.programs.pop(parent)
 
     def _build_project_state(self) -> Optional[dict[str, Any]]:
         if not self.parser or not self.project:
@@ -1317,8 +1343,8 @@ class L5KTunerApp:
             return
 
         new_keys = self._keys_for_project(new_project)
-        added = sorted(new_keys - previous_keys, key=self._merge_item_sort_key)
-        removed = sorted(previous_keys - new_keys, key=self._merge_item_sort_key)
+        added = self._merge_preview_items(new_keys - previous_keys)
+        removed = self._merge_preview_items(previous_keys - new_keys)
         self._show_merge_preview(
             file_path=file_path,
             new_project=new_project,
